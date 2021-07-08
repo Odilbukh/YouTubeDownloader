@@ -28,8 +28,9 @@ class YouTubeHandler extends BaseHandler
      * @var string[]
      */
     protected $urlRegExPatterns = [
-        'full' => '/(\/\/|www\.)youtube\.com\/watch\?v\=[a-zA-Z0-9-]+/',
+        'full' => '/(\/\/|www\.)youtube\.[a-z]+\/watch\?v\=[a-zA-Z0-9-]+/',
         'short' => '/(\/\/|www\.)youtu\.be\/[a-zA-Z0-9-]+/',
+        'embed' => '/(\/\/|www\.)youtube\.[a-z]+\/embed\/[a-zA-Z0-9-]+/',
     ];
 
     /**
@@ -107,18 +108,26 @@ class YouTubeHandler extends BaseHandler
             }
         }
 
-        if ($data->streamingData && $data->streamingData->adaptiveFormats) {
-            foreach ($data->streamingData->adaptiveFormats as $item) {
-                $quality = $item->qualityLabel ?? $item->bitrate;
-                $url = URL::fromString($item->url);
-                if (strpos($item->mimeType, MP4ResourceItem::MIMEType()) !== false) {
-                    $resItem = new MP4ResourceItem($url, $quality);
-                    $ytFetchedResource->addItem($resItem);
-                    $ytFetchedResource->setVideoPreview($resItem);
+        if ($data->streamingData ) {
+            foreach ($data->streamingData->formats as $item) {
+                if ($item->url) {
+                    if (strpos($item->mimeType, MP4ResourceItem::MIMEType()) !== false) {
+                        $url = URL::fromString($item->url);
+                        $quality = $item->qualityLabel ?? $item->bitrate;
+                        $resItem = new MP4ResourceItem($url, $quality);
+                        $ytFetchedResource->addItem($resItem);
+                        $ytFetchedResource->setVideoPreview($resItem);
+                    }
                 }
-                if (strpos($item->mimeType, AudioMP4ResourceItem::MIMEType()) !== false) {
-                    $resItem = new AudioMP4ResourceItem($url, $quality);
-                    $ytFetchedResource->addItem($resItem);
+            }
+            foreach ($data->streamingData->adaptiveFormats as $item) {
+                if ($item->url) {
+                    if (strpos($item->mimeType, AudioMP4ResourceItem::MIMEType()) !== false) {
+                        $url = URL::fromString($item->url);
+                        $quality = $item->qualityLabel ?? $item->bitrate;
+                        $resItem = new AudioMP4ResourceItem($url, $quality);
+                        $ytFetchedResource->addItem($resItem);
+                    }
                 }
             }
         }
@@ -149,13 +158,8 @@ class YouTubeHandler extends BaseHandler
             throw new NothingToExtractException();
         }
         $content = '{"responseContext' . explode('{"responseContext', $content)[1];
-        if (strpos($content, '}}}}}') !== false) {
-            $content = explode('}}}}}', $content)[0] . '}}}}}';
-        } else if (strpos($content, '}}}}') !== false) {
-            $content = explode('}}}}', $content)[0] . '}}}}';
-        } else if (strpos($content, '}}}') !== false) {
-            $content = explode('}}}', $content)[0] . '}}}';
-        }
+        $content = explode('}&', $content)[0] . '}';
+
         $content = json_decode($content);
         if (json_last_error()) {
             throw new NothingToExtractException();
@@ -175,6 +179,12 @@ class YouTubeHandler extends BaseHandler
         }
 
         preg_match($this->urlRegExPatterns['short'], $url->getValue(), $matches);
+        if ($matches) {
+            $parts = explode('/', $matches[0]);
+            return end($parts);
+        }
+
+        preg_match($this->urlRegExPatterns['embed'], $url->getValue(), $matches);
         if ($matches) {
             $parts = explode('/', $matches[0]);
             return end($parts);
