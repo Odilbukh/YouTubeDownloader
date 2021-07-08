@@ -125,8 +125,7 @@ class YouTubeHandler extends BaseHandler
                     if (strpos($item->mimeType, AudioMP4ResourceItem::MIMEType()) !== false) {
                         $url = URL::fromString($item->url);
                         $quality = $item->qualityLabel ?? $item->bitrate;
-                        $resItem = new AudioMP4ResourceItem($url, $quality);
-                        $ytFetchedResource->addItem($resItem);
+                        $ytFetchedResource->addItem(new AudioMP4ResourceItem($url, $quality));
                     }
                 }
             }
