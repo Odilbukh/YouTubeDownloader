@@ -295,6 +295,7 @@ class YouTubeHandler extends BaseHandler
         if ($response->getStatusCode() === self::TOO_MANY_REQUESTS_HTTP_CODE) {
             throw new TooManyRequestsException();
         }
+
         if ($response->getStatusCode() !== self::SUCCESS_HTTP_CODE) {
             throw new BadResponseException();
         }
