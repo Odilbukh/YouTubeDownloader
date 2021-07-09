@@ -1,10 +1,10 @@
 <?php
 namespace AnyDownloader\YouTubeDownloader;
 
+use AnyDownloader\DownloadManager\Exception\BadResponseException;
 use AnyDownloader\DownloadManager\Exception\NothingToExtractException;
 use AnyDownloader\DownloadManager\Exception\NotValidUrlException;
 use AnyDownloader\DownloadManager\Handler\BaseHandler;
-use AnyDownloader\DownloadManager\Model\Attribute;
 use AnyDownloader\DownloadManager\Model\Attribute\AuthorAttribute;
 use AnyDownloader\DownloadManager\Model\Attribute\HashtagsAttribute;
 use AnyDownloader\DownloadManager\Model\Attribute\TitleAttribute;
@@ -15,22 +15,28 @@ use AnyDownloader\DownloadManager\Model\ResourceItem\ResourceItemFactory;
 use AnyDownloader\DownloadManager\Model\ResourceItem\Text\XMLResourceItem;
 use AnyDownloader\DownloadManager\Model\ResourceItem\Video\MP4ResourceItem;
 use AnyDownloader\DownloadManager\Model\URL;
+use AnyDownloader\YouTubeDownloader\Exception\NotValidYTItemException;
+use AnyDownloader\YouTubeDownloader\Exception\TooManyRequestsException;
 use AnyDownloader\YouTubeDownloader\Model\YouTubeFetchedResource;
 use Symfony\Contracts\HttpClient\Exception\RedirectionExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class YouTubeHandler extends BaseHandler
 {
+    const SUCCESS_HTTP_CODE = 200;
+    const TOO_MANY_REQUESTS_HTTP_CODE = 429;
+
     /**
      * @var string[]
      */
     protected $urlRegExPatterns = [
-        'full' => '/(\/\/|www\.)youtube\.[a-z]+\/watch\?v\=[a-zA-Z0-9-]+/',
-        'short' => '/(\/\/|www\.)youtu\.be\/[a-zA-Z0-9-]+/',
-        'embed' => '/(\/\/|www\.)youtube\.[a-z]+\/embed\/[a-zA-Z0-9-]+/',
+        'full' => '/[\/\/|www.]youtube\.[a-z]+\/watch\?v\=([a-zA-Z0-9-]+)/',
+        'short' => '/[\/\/|www.]youtu\.be\/([a-zA-Z0-9-]+)/',
+        'embed' => '/[\/\/|www.]youtube\.[a-z]+\/embed\/([a-zA-Z0-9-]+)/',
     ];
 
     /**
@@ -50,11 +56,14 @@ class YouTubeHandler extends BaseHandler
     /**
      * @param URL $url
      * @return FetchedResource
-     * @throws NothingToExtractException
-     * @throws NotValidUrlException
+     * @throws BadResponseException
      * @throws ClientExceptionInterface
+     * @throws NotValidUrlException
+     * @throws NothingToExtractException
      * @throws RedirectionExceptionInterface
-     * @throws ServerExceptionInterface|TransportExceptionInterface
+     * @throws ServerExceptionInterface
+     * @throws TooManyRequestsException
+     * @throws TransportExceptionInterface
      */
     public function fetchResource(URL $url): FetchedResource
     {
@@ -62,18 +71,21 @@ class YouTubeHandler extends BaseHandler
         if (empty($vId)) {
             throw new NotValidUrlException();
         }
-        $data = $this->getDataFromYoutube($vId);
+        $data = $this->getVideoInfo($vId);
         $ytFetchedResource = new YouTubeFetchedResource($url);
         if ($data->videoDetails) {
             if ($data->videoDetails->title) {
                 $ytFetchedResource->addAttribute(new TitleAttribute($data->videoDetails->title));
             }
+
             if ($data->videoDetails->text) {
                 $ytFetchedResource->addAttribute(new TextAttribute($data->videoDetails->text));
             }
+
             if ($data->videoDetails->keywords) {
                 $ytFetchedResource->addAttribute(HashtagsAttribute::fromStringArray($data->videoDetails->keywords));
             }
+
             if ($data->videoDetails->channelId) {
                 $ytFetchedResource->addAttribute(
                     new AuthorAttribute(
@@ -83,6 +95,7 @@ class YouTubeHandler extends BaseHandler
                     )
                 );
             }
+
             if ($data->videoDetails->thumbnail && count($data->videoDetails->thumbnail->thumbnails)) {
                 $thumbData = end($data->videoDetails->thumbnail->thumbnails);
                 $thumbnail = ResourceItemFactory::fromURL(
@@ -108,25 +121,33 @@ class YouTubeHandler extends BaseHandler
             }
         }
 
+        $playerSource = $this->fetchPlayerSource($vId);
+
         if ($data->streamingData ) {
             foreach ($data->streamingData->formats as $item) {
-                if ($item->url) {
-                    if (strpos($item->mimeType, MP4ResourceItem::MIMEType()) !== false) {
-                        $url = URL::fromString($item->url);
-                        $quality = $item->qualityLabel ?? $item->bitrate;
-                        $resItem = new MP4ResourceItem($url, $quality);
-                        $ytFetchedResource->addItem($resItem);
-                        $ytFetchedResource->setVideoPreview($resItem);
+                if (strpos($item->mimeType, MP4ResourceItem::MIMEType()) !== false) {
+                    try {
+                        $url = $this->getItemURL($item, $playerSource);
+                    } catch (NotValidYTItemException $e) {
+                        continue;
                     }
+                    $quality = $item->qualityLabel ?? $item->bitrate;
+                    $resItem = new MP4ResourceItem($url, $quality);
+                    $ytFetchedResource->addItem($resItem);
+                    $ytFetchedResource->setVideoPreview($resItem);
                 }
+
             }
+
             foreach ($data->streamingData->adaptiveFormats as $item) {
-                if ($item->url) {
-                    if (strpos($item->mimeType, AudioMP4ResourceItem::MIMEType()) !== false) {
-                        $url = URL::fromString($item->url);
-                        $quality = $item->qualityLabel ?? $item->bitrate;
-                        $ytFetchedResource->addItem(new AudioMP4ResourceItem($url, $quality));
+                if (strpos($item->mimeType, AudioMP4ResourceItem::MIMEType()) !== false) {
+                    try {
+                        $url = $this->getItemURL($item, $playerSource);
+                    } catch (NotValidYTItemException $e) {
+                        continue;
                     }
+                    $quality = $item->qualityLabel ?? $item->bitrate;
+                    $ytFetchedResource->addItem(new AudioMP4ResourceItem($url, $quality));
                 }
             }
         }
@@ -135,35 +156,99 @@ class YouTubeHandler extends BaseHandler
     }
 
     /**
+     * @param \stdClass $item
+     * @param string $playerSource
+     * @return URL|null
+     * @throws NotValidUrlException
+     * @throws NotValidYTItemException
+     */
+    private function getItemURL(\stdClass $item, string $playerSource): ?URL
+    {
+        if ($item->url) {
+            return URL::fromString($item->url);
+        }
+        if ($item->cipher || $item->signatureCipher) {
+            return $this->getURLFromSignatureCipher(
+                $item->cipher ?? $item->signatureCipher,
+                $playerSource
+            );
+        }
+        throw new NotValidYTItemException();
+    }
+
+    /**
+     * @param string $cipher
+     * @param string $playerSource
+     * @return URL
+     * @throws NotValidUrlException
+     */
+    private function getURLFromSignatureCipher(string $cipher, string $playerSource): URL
+    {
+        parse_str($cipher, $params);
+        $decodedSign = (new SignatureDecoder())->decode($params['s'], $playerSource);
+        return URL::fromString($params['url'] . '&' . $params['sp'] . '=' . $decodedSign);
+    }
+
+    /**
      * @param string $vId
      * @return \stdClass
+     * @throws BadResponseException
+     * @throws ClientExceptionInterface
+     * @throws NotValidUrlException
      * @throws NothingToExtractException
      * @throws RedirectionExceptionInterface
      * @throws ServerExceptionInterface
-     * @throws ClientExceptionInterface|TransportExceptionInterface
+     * @throws TooManyRequestsException
+     * @throws TransportExceptionInterface
      */
-    private function getDataFromYoutube(string $vId): \stdClass
+    private function getVideoInfo(string $vId): \stdClass
     {
-        $resp = $this->client->request(
-            'GET',
-            'https://www.youtube.com/get_video_info?video_id=' . $vId . '&eurl=https%3A%2F%2Fyoutube.googleapis.com%2Fv%2F' . $vId . '&html5=1&c=TVHTML5&cver=6.20180913',
-            [
-                'verify_peer' => false,
-                'verify_host' => false
-            ]
-        );
-        $content = urldecode($resp->getContent());
-        if (strpos($content, 'responseContext') === false) {
+        $resp = $this->request(URL::fromString(
+            'https://www.youtube.com/get_video_info?' . http_build_query([
+                'video_id' => $vId,
+                'eurl' => 'https://youtube.googleapis.com/v/' . $vId,
+                'html5' => 1,
+                'c' => 'TVHTML5',
+                'cver' => '6.20180913'
+            ])
+        ));
+        if (!preg_match('/(\{"responseContext(.*)\})&/', urldecode($resp->getContent()), $matches)) {
             throw new NothingToExtractException();
         }
-        $content = '{"responseContext' . explode('{"responseContext', $content)[1];
-        $content = explode('}&', $content)[0] . '}';
 
-        $content = json_decode($content);
+        $content = json_decode($matches[1]);
         if (json_last_error()) {
             throw new NothingToExtractException();
         }
         return $content;
+    }
+
+    /**
+     * @param string $vId
+     * @return string
+     * @throws BadResponseException
+     * @throws ClientExceptionInterface
+     * @throws NotValidUrlException
+     * @throws RedirectionExceptionInterface
+     * @throws ServerExceptionInterface
+     * @throws TooManyRequestsException
+     * @throws TransportExceptionInterface
+     */
+    private function fetchPlayerSource(string $vId): string
+    {
+        $url = "https://www.youtube.com/watch?" . http_build_query([
+                'v' => $vId,
+                'gl' => 'US',
+                'hl' => 'en',
+                'has_verified' => 1,
+                'bpctr' => 9999999999
+            ]);
+        $content = $this->request(URL::fromString($url))->getContent();
+        if (preg_match('/<script\s*src="([^"]+player[^"]+js)/', $content, $matches)) {
+            $playerURL = 'https://www.youtube.com/' . $matches[1];
+            return $this->request(URL::fromString($playerURL))->getContent();
+        }
+        return '';
     }
 
     /**
@@ -172,24 +257,49 @@ class YouTubeHandler extends BaseHandler
      */
     private function extractVideoIdFromURL(URL $url): string
     {
-        preg_match($this->urlRegExPatterns['full'], $url->getValue(), $matches);
-        if ($matches) {
-            return explode('=', $matches[0])[1];
+        if (preg_match($this->urlRegExPatterns['full'], $url->getValue(), $matches)) {
+            return $matches[1];
         }
 
-        preg_match($this->urlRegExPatterns['short'], $url->getValue(), $matches);
-        if ($matches) {
-            $parts = explode('/', $matches[0]);
-            return end($parts);
+        if (preg_match($this->urlRegExPatterns['short'], $url->getValue(), $matches)) {
+            return $matches[1];
         }
 
-        preg_match($this->urlRegExPatterns['embed'], $url->getValue(), $matches);
-        if ($matches) {
-            $parts = explode('/', $matches[0]);
-            return end($parts);
+        if (preg_match($this->urlRegExPatterns['embed'], $url->getValue(), $matches)) {
+            return $matches[1];
         }
 
         return '';
+    }
+
+    /**
+     * @param URL $url
+     * @return ResponseInterface
+     * @throws BadResponseException
+     * @throws TooManyRequestsException
+     * @throws TransportExceptionInterface
+     */
+    private function request(URL $url): ResponseInterface
+    {
+        $options = [
+            'verify_peer' => false,
+            'verify_host' => false
+        ];
+
+        $response = $this->client->request(
+            'GET',
+            $url->getValue(),
+            $options
+        );
+
+        if ($response->getStatusCode() === self::TOO_MANY_REQUESTS_HTTP_CODE) {
+            throw new TooManyRequestsException();
+        }
+        if ($response->getStatusCode() !== self::SUCCESS_HTTP_CODE) {
+            throw new BadResponseException();
+        }
+
+        return $response;
     }
 
 }
