@@ -73,20 +73,20 @@ class YouTubeHandler extends BaseHandler
         }
         $data = $this->getVideoInfo($vId);
         $ytFetchedResource = new YouTubeFetchedResource($url);
-        if ($data->videoDetails) {
-            if ($data->videoDetails->title) {
+        if (isset($data->videoDetails)) {
+            if (isset($data->videoDetails->title)) {
                 $ytFetchedResource->addAttribute(new TitleAttribute($data->videoDetails->title));
             }
 
-            if ($data->videoDetails->text) {
+            if (isset($data->videoDetails->text)) {
                 $ytFetchedResource->addAttribute(new TextAttribute($data->videoDetails->text));
             }
 
-            if ($data->videoDetails->keywords) {
+            if (isset($data->videoDetails->keywords)) {
                 $ytFetchedResource->addAttribute(HashtagsAttribute::fromStringArray($data->videoDetails->keywords));
             }
 
-            if ($data->videoDetails->channelId) {
+            if (isset($data->videoDetails->channelId)) {
                 $ytFetchedResource->addAttribute(
                     new AuthorAttribute(
                         $data->videoDetails->channelId ?? null,
@@ -96,7 +96,7 @@ class YouTubeHandler extends BaseHandler
                 );
             }
 
-            if ($data->videoDetails->thumbnail && count($data->videoDetails->thumbnail->thumbnails)) {
+            if (isset($data->videoDetails->thumbnail) && count($data->videoDetails->thumbnail->thumbnails)) {
                 $thumbData = end($data->videoDetails->thumbnail->thumbnails);
                 $thumbnail = ResourceItemFactory::fromURL(
                     URL::fromString($thumbData->url),
@@ -107,8 +107,8 @@ class YouTubeHandler extends BaseHandler
             }
         }
 
-        if ($data->captions) {
-            if($data->captions->playerCaptionsTracklistRenderer->captionTracks) {
+        if (isset($data->captions)) {
+            if(isset($data->captions->playerCaptionsTracklistRenderer->captionTracks)) {
                 $captionTracks = $data->captions->playerCaptionsTracklistRenderer->captionTracks;
                 foreach ($captionTracks as $captionTrack) {
                     $ytFetchedResource->addItem(
@@ -123,7 +123,7 @@ class YouTubeHandler extends BaseHandler
 
         $playerSource = $this->fetchPlayerSource($vId);
 
-        if ($data->streamingData ) {
+        if (isset($data->streamingData)) {
             foreach ($data->streamingData->formats as $item) {
                 if (strpos($item->mimeType, MP4ResourceItem::MIMEType()) !== false) {
                     try {
@@ -164,10 +164,10 @@ class YouTubeHandler extends BaseHandler
      */
     private function getItemURL(\stdClass $item, string $playerSource): ?URL
     {
-        if ($item->url) {
+        if (isset($item->url)) {
             return URL::fromString($item->url);
         }
-        if ($item->cipher || $item->signatureCipher) {
+        if (isset($item->cipher) || isset($item->signatureCipher)) {
             return $this->getURLFromSignatureCipher(
                 $item->cipher ?? $item->signatureCipher,
                 $playerSource
