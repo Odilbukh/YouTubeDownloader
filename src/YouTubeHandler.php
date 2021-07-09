@@ -34,9 +34,9 @@ class YouTubeHandler extends BaseHandler
      * @var string[]
      */
     protected $urlRegExPatterns = [
-        'full' => '/[\/\/|www.]youtube\.[a-z]+\/watch\?v\=([a-zA-Z0-9-]+)/',
-        'short' => '/[\/\/|www.]youtu\.be\/([a-zA-Z0-9-]+)/',
-        'embed' => '/[\/\/|www.]youtube\.[a-z]+\/embed\/([a-zA-Z0-9-]+)/',
+        'full' => '/[\/\/|www.]youtube\.[a-z]+\/watch\?v\=([a-zA-Z0-9-_]+)/',
+        'short' => '/[\/\/|www.]youtu\.be\/([a-zA-Z0-9-_]+)/',
+        'embed' => '/[\/\/|www.]youtube\.[a-z]+\/embed\/([a-zA-Z0-9-_]+)/',
     ];
 
     /**
