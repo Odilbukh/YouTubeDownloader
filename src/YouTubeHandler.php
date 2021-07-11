@@ -6,6 +6,7 @@ use AnyDownloader\DownloadManager\Exception\NothingToExtractException;
 use AnyDownloader\DownloadManager\Exception\NotValidUrlException;
 use AnyDownloader\DownloadManager\Handler\BaseHandler;
 use AnyDownloader\DownloadManager\Model\Attribute\AuthorAttribute;
+use AnyDownloader\DownloadManager\Model\Attribute\Count\ViewsCountAttribute;
 use AnyDownloader\DownloadManager\Model\Attribute\HashtagsAttribute;
 use AnyDownloader\DownloadManager\Model\Attribute\TitleAttribute;
 use AnyDownloader\DownloadManager\Model\Attribute\TextAttribute;
@@ -34,9 +35,9 @@ class YouTubeHandler extends BaseHandler
      * @var string[]
      */
     protected $urlRegExPatterns = [
-        'full' => '/[\/\/|www.]youtube\.[a-z]+\/watch\?v\=([a-zA-Z0-9-_]+)/',
-        'short' => '/[\/\/|www.]youtu\.be\/([a-zA-Z0-9-_]+)/',
-        'embed' => '/[\/\/|www.]youtube\.[a-z]+\/embed\/([a-zA-Z0-9-_]+)/',
+        'full' => '/[\/\/|www.|m.]youtube\.[a-z]+\/watch\?v\=([a-zA-Z0-9-_]+)/',
+        'short' => '/[\/\/|www.|m.]youtu\.be\/([a-zA-Z0-9-_]+)/',
+        'embed' => '/[\/\/|www.|m.]youtube\.[a-z]+\/embed\/([a-zA-Z0-9-_]+)/',
     ];
 
     /**
@@ -84,6 +85,10 @@ class YouTubeHandler extends BaseHandler
 
             if (isset($data->videoDetails->keywords)) {
                 $ytFetchedResource->addAttribute(HashtagsAttribute::fromStringArray($data->videoDetails->keywords));
+            }
+
+            if (isset($data->videoDetails->viewCount)) {
+                $ytFetchedResource->addAttribute(new ViewsCountAttribute($data->videoDetails->viewCount));
             }
 
             if (isset($data->videoDetails->channelId)) {
