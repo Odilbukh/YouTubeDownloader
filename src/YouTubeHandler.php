@@ -136,8 +136,8 @@ class YouTubeHandler extends BaseHandler
                     } catch (NotValidYTItemException $e) {
                         continue;
                     }
-                    $quality = $item->qualityLabel ?? $item->bitrate;
-                    $resItem = new MP4ResourceItem($url, $quality);
+                    $title = $item->qualityLabel ?? $item->bitrate;
+                    $resItem = new MP4ResourceItem($url, $title);
                     $ytFetchedResource->addItem($resItem);
                     $ytFetchedResource->setVideoPreview($resItem);
                 }
@@ -151,8 +151,8 @@ class YouTubeHandler extends BaseHandler
                     } catch (NotValidYTItemException $e) {
                         continue;
                     }
-                    $quality = $item->qualityLabel ?? $item->bitrate;
-                    $ytFetchedResource->addItem(new AudioMP4ResourceItem($url, $quality));
+                    $title = $item->qualityLabel ?? $item->bitrate;
+                    $ytFetchedResource->addItem(new AudioMP4ResourceItem($url, $title));
                 }
             }
         }
