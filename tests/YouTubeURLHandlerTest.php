@@ -14,6 +14,21 @@ class YouTubeURLHandlerTest extends TestCase
         $handler = new YouTubeHandler(HttpClient::create());
         $url = URL::fromString('https://www.youtube.com/watch?v=43TmnIaL3n4');
         $this->assertTrue($handler->isValidUrl($url));
+
+        $url = URL::fromString('https://www.youtube.com/watch?vi=43TmnIaL3n4');
+        $this->assertTrue($handler->isValidUrl($url));
+
+        $url = URL::fromString('https://www.youtube.com/?v=43TmnIaL3n4');
+        $this->assertTrue($handler->isValidUrl($url));
+
+        $url = URL::fromString('https://www.youtube.com/?vi=43TmnIaL3n4');
+        $this->assertTrue($handler->isValidUrl($url));
+
+        $url = URL::fromString('https://www.youtube.com/v/43TmnIaL3n4');
+        $this->assertTrue($handler->isValidUrl($url));
+
+        $url = URL::fromString('https://www.youtube.com/vi/43TmnIaL3n4');
+        $this->assertTrue($handler->isValidUrl($url));
     }
 
     /** @test */
