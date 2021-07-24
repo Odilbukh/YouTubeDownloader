@@ -208,23 +208,32 @@ class YouTubeHandler extends BaseHandler
      */
     private function getVideoInfo(string $vId): \stdClass
     {
-        $resp = $this->request(URL::fromString(
-            'https://www.youtube.com/get_video_info?' . http_build_query([
-                'video_id' => $vId,
-                'eurl' => 'https://youtube.googleapis.com/v/' . $vId,
-                'html5' => 1,
-                'c' => 'TVHTML5',
-                'cver' => '6.20180913'
-            ])
-        ));
-        if (!preg_match('/(\{"responseContext(.*)\})&/', urldecode($resp->getContent()), $matches)) {
-            throw new NothingToExtractException();
-        }
+        $resp = $this->request(
+            URL::fromString('https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'),
+            'POST',
+            [
+                'headers' => ['Content-Type' => 'application/json'],
+                'json' => [
+                    'videoId' => $vId,
+                    'context' => [
+                        'client' => [
+                            'hl' => 'en',
+                            'clientName' => 'WEB',
+                            'clientVersion' => '2.20210721.00.00',
+                            'mainAppWebInfo' => [
+                                'graftUrl' => '/watch?v=' . $vId
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        );
 
-        $content = json_decode($matches[1]);
+        $content = json_decode($resp->getContent());
         if (json_last_error()) {
             throw new NothingToExtractException();
         }
+
         return $content;
     }
 
@@ -284,15 +293,15 @@ class YouTubeHandler extends BaseHandler
      * @throws TooManyRequestsException
      * @throws TransportExceptionInterface
      */
-    private function request(URL $url): ResponseInterface
+    private function request(URL $url, $method = 'GET', $options = []): ResponseInterface
     {
-        $options = [
+        $options = array_merge([
             'verify_peer' => false,
             'verify_host' => false
-        ];
+        ], $options);
 
         $response = $this->client->request(
-            'GET',
+            $method,
             $url->getValue(),
             $options
         );
