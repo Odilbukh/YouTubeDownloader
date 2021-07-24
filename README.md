@@ -404,7 +404,7 @@ Array
 2. Use it with DownloadManager. 
 Useful in case if your application is willing to download files from different sources (i.e. has more than one download handler)
 
-```
+```php
 <?php
 use AnyDownloader\DownloadManager\DownloadManager;
 use AnyDownloader\DownloadManager\Model\URL;
