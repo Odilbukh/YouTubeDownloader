@@ -10,7 +10,7 @@ You have two options of how to use this package
 
 1. Use it standalone
 
-```
+```php
 <?php
 use AnyDownloader\DownloadManager\Model\URL;
 use AnyDownloader\YouTubeDownloader\YouTubeHandler;
