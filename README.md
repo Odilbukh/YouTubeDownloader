@@ -10,7 +10,7 @@ You have two options of how to use this package
 
 1. Use it standalone
 
-```
+```php
 <?php
 use AnyDownloader\DownloadManager\Model\URL;
 use AnyDownloader\YouTubeDownloader\YouTubeHandler;
@@ -404,7 +404,7 @@ Array
 2. Use it with DownloadManager. 
 Useful in case if your application is willing to download files from different sources (i.e. has more than one download handler)
 
-```
+```php
 <?php
 use AnyDownloader\DownloadManager\DownloadManager;
 use AnyDownloader\DownloadManager\Model\URL;
@@ -421,3 +421,5 @@ $YouTubePageUrl = URL::fromString('https://www.youtube.com/watch?v=zIwLWfaAg-8')
 $video = $downloadManager->fetchResource($YouTubePageUrl);
 print_r($video->toArray());
 ```
+
+[iwannacode.net](https://iwannacode.net)
