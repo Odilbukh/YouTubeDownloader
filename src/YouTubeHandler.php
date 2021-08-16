@@ -208,28 +208,13 @@ class YouTubeHandler extends BaseHandler
      */
     private function getVideoInfo(string $vId): \stdClass
     {
-        $resp = $this->request(
-            URL::fromString('https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'),
-            'POST',
-            [
-                'headers' => ['Content-Type' => 'application/json'],
-                'json' => [
-                    'videoId' => $vId,
-                    'context' => [
-                        'client' => [
-                            'hl' => 'en',
-                            'clientName' => 'WEB',
-                            'clientVersion' => '2.20210721.00.00',
-                            'mainAppWebInfo' => [
-                                'graftUrl' => '/watch?v=' . $vId
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        );
+        $resp = $this->request(URL::fromString('https://youtube.com/watch?v=' . $vId));
+        $content = $resp->getContent();
 
-        $content = json_decode($resp->getContent());
+        if (!preg_match('/var ytInitialPlayerResponse = (.*);<\/script>/', $content, $matches)) {
+            throw new NothingToExtractException();
+        }
+        $content = json_decode($matches[1]);
         if (json_last_error()) {
             throw new NothingToExtractException();
         }

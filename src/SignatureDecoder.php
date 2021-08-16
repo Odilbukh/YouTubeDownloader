@@ -38,7 +38,7 @@ class SignatureDecoder
     {
         if (preg_match('@,\s*encodeURIComponent\((\w{2})@is', $playerSource, $matches)) {
             return preg_quote($matches[1]);
-        } else if (preg_match('@(?:\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2})\s*=\s*function\(\s*a\s*\)\s*{\s*a\s*=\s*a\.split\(\s*""\s*\)@is', $playerSource, $matches)) {
+        } else if (preg_match('@(?:\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,3})\s*=\s*function\(\s*a\s*\)\s*{\s*a\s*=\s*a\.split\(\s*""\s*\)@is', $playerSource, $matches)) {
             return preg_quote($matches[1]);
         }
 
