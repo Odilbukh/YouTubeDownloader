@@ -14,7 +14,7 @@
         }
     ],
     "require": {
-        "php": "^7.2.5",
+        "php": ">=7.2.5",
         "any-downloader/download-manager": "dev-master",
         "symfony/http-client": ">=5.3.3",
         "ext-json": "*"
